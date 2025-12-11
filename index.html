@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Customer Enquiry Platform</title>
+    
+    <style>
+        /*
+         * -----------------------------------------------------------------
+         * 🎨 CSS STYLES 🎨
+         * -----------------------------------------------------------------
+         */
+
+        :root {
+            --color-primary: #1263c9;
+            --color-text: #212529;
+            --color-background: #f4f6f8;
+            --color-card-background: #ffffff;
+            --color-border: #dee2e6;
+            --color-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --color-status-new: #ffc107;
+            --color-status-contacted: #17a2b8;
+            --color-status-closed: #28a745;
+            --color-ai-score: #e83e8c;
+        }
+
+        [data-theme='dark'] {
+            --color-primary: #599bff;
+            --color-text: #f8f9fa;
+            --color-background: #2b3035;
+            --color-card-background: #3c4146;
+            --color-border: #495057;
+            --color-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            --color-status-new: #ffeb3b;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: sans-serif; background-color: var(--color-background); color: var(--color-text); padding: 20px; transition: background-color 0.3s; }
+        header { background-color: var(--color-card-background); box-shadow: var(--color-shadow); padding: 15px 20px; margin-bottom: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+        #public-form { background-color: var(--color-card-background); padding: 30px; border-radius: 8px; box-shadow: var(--color-shadow); margin-bottom: 40px; }
+        #enquiry-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .form-group { display: flex; flex-direction: column; }
+        #enquiry-form input, #enquiry-form textarea, #enquiry-form select { padding: 12px; border: 1px solid var(--color-border); border-radius: 6px; background-color: var(--color-background); color: var(--color-text); margin-top: 5px;}
+        #enquiry-form button[type="submit"] { grid-column: 1 / -1; padding: 14px; background-color: var(--color-primary); color: white; border: none; border-radius: 6px; cursor: pointer; margin-top: 10px; }
+        .enquiry-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .status-panel { background-color: var(--color-card-background); border-radius: 8px; box-shadow: var(--color-shadow); padding: 15px; min-height: 400px; border-top: 5px solid; }
+        .status-panel[data-status="New"] { border-color: var(--color-status-new); } 
+        .status-panel[data-status="Contacted"] { border-color: var(--color-status-contacted); } 
+        .status-panel[data-status="Closed"] { border-color: var(--color-status-closed); } 
+        .enquiry-card { background-color: var(--color-background); border: 1px solid var(--color-border); padding: 15px; border-radius: 6px; margin-bottom: 15px; cursor: grab; }
+        .meta-line { display: flex; justify-content: space-between; font-size: 0.85rem; color: #6c757d; margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--color-border); }
+        .meta-line:first-of-type { border-top: none; padding-top: 0; }
+        .wait-time { font-weight: bold; color: var(--color-status-new); }
+        .ai-score { font-weight: bold; color: var(--color-ai-score); background: rgba(232, 62, 140, 0.1); padding: 2px 6px; border-radius: 4px; }
+        .subject-tag { padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: bold; color: white; text-transform: uppercase; }
+        .tag-sales { background-color: #e83e8c; }
+        .staff-actions button { padding: 6px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; margin-right: 5px; margin-top: 10px;}
+        .btn-contacted { background-color: var(--color-status-contacted); color: white; }
+        .btn-closed { background-color: var(--color-status-closed); color: white; }
+        .enquiries-container.drag-over { background-color: rgba(0, 188, 212, 0.1); border-radius: 6px; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Customer Enquiry Platform 💡</h1>
+        <div class="controls">
+            <button id="theme-toggle" aria-label="Toggle Dark/Light Mode">🌙</button>
+        </div>
+    </header>
+
+    <section id="public-form">
+        <h2>Submit Your Enquiry</h2>
+        <form id="enquiry-form">
+            <div class="form-group"><label for="full-name">Full Name *</label><input type="text" id="full-name" required></div>
+            <div class="form-group"><label for="email-address">Email Address *</label><input type="email" id="email-address" required></div>
+            <div class="form-group">
+                <label for="enquiry-subject">Subject/Topic *</label>
+                <select id="enquiry-subject" required>
+                    <option value="Sales">Sales</option>
+                    <option value="Support">Support</option>
+                    <option value="Partnership">Partnership</option>
+                    <option value="General">General</option>
+                </select>
+            </div>
+            <div class="form-group" style="grid-column: 1 / -1;"><label for="enquiry-message">Message *</label><textarea id="enquiry-message" rows="4" required></textarea></div>
+            <button type="submit">🚀 Submit Enquiry</button>
+        </form>
+        <p id="submission-status" style="margin-top: 15px; font-weight: bold;"></p>
+    </section>
+
+    <section id="staff-board">
+        <h2>Staff Management Board (Real-Time)</h2>
+        <div class="enquiry-board">
+            <div class="status-panel" data-status="New">
+                <h3>🆕 New Enquiries</h3>
+                <div class="enquiries-container" id="New-container"></div>
+            </div>
+            <div class="status-panel" data-status="Contacted">
+                <h3>📞 Contacted</h3>
+                <div class="enquiries-container" id="Contacted-container"></div>
+            </div>
+            <div class="status-panel" data-status="Closed">
+                <h3>✅ Closed</h3>
+                <div class="enquiries-container" id="Closed-container"></div>
+            </div>
+        </div>
+    </section>
+
+    <script type="module">
+        
+        // ----------------------- 🟢 FIREBASE IMPORTS (MODULAR) 🟢 -----------------------
+        // This ensures the SDK is only loaded once via the modern, non-conflicting method.
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js';
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            doc, 
+            updateDoc, 
+            onSnapshot, 
+            query, 
+            orderBy, 
+            Timestamp 
+        } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js';
+
+        // ----------------------- 🟢 FIREBASE CONFIGURATION (UPDATED) 🟢 -----------------------
+        // Your new configuration for project: customer-keys-d6434
+        const firebaseConfig = {
+            apiKey: "AIzaSyAVVHtjW28pUK30xcAMY5_t5PinkAlRNTg",
+            authDomain: "customer-keys-d6434.firebaseapp.com",
+            projectId: "customer-keys-d6434",
+            storageBucket: "customer-keys-d6434.firebasestorage.app",
+            messagingSenderId: "610383788400",
+            appId: "1:610383788400:web:a011f2949bb73a87bf37b5"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const enquiriesCollectionRef = collection(db, "enquiries"); 
+        
+        console.log("[FIREBASE] Initialized with customer-keys-d6434 project.");
+
+
+        // ----------------------- Data Management & State -----------------------
+        const STORAGE_KEY_THEME = 'enquiryBoard_theme'; 
+        let enquiries = []; 
+        const STATUSES = ['New', 'Contacted', 'Closed'];
+        let waitTimeInterval = null; 
+
+        // ----------------------- FIREBASE DATA OPERATIONS -----------------------
+
+        /**
+         * Adds a new enquiry to the Firestore database.
+         */
+        async function addEnquiryToFirestore(enquiryData) {
+            try {
+                const dataToSave = {
+                    ...enquiryData,
+                    timestamp: Timestamp.fromDate(new Date(enquiryData.timestamp))
+                };
+                await addDoc(enquiriesCollectionRef, dataToSave);
+                return true;
+            } catch (e) {
+                console.error("Error adding document. Check Firestore Rules:", e);
+                return false;
+            }
+        }
+
+        /**
+         * Updates the status of an existing enquiry in Firestore (triggers real-time update).
+         */
+        async function updateEnquiryStatusInFirestore(enquiryId, newStatus) {
+            try {
+                const enquiryDocRef = doc(db, "enquiries", enquiryId);
+                await updateDoc(enquiryDocRef, {
+                    status: newStatus
+                });
+            } catch (e) {
+                console.error("Error updating document. Check Firestore Rules:", e);
+            }
+        }
+        
+        /**
+         * Starts the core real-time listener for the Staff Board.
+         */
+        function startRealtimeEnquiriesListener() {
+            // Query: Enquiries sorted by timestamp descending (newest first).
+            const q = query(enquiriesCollectionRef, orderBy("timestamp", "desc"));
+
+            // onSnapshot sets up the persistent, real-time connection.
+            onSnapshot(q, (snapshot) => {
+                enquiries = [];
+                snapshot.forEach((doc) => {
+                    const data = doc.data();
+                    const isoTimestamp = data.timestamp ? data.timestamp.toDate().toISOString() : new Date().toISOString(); 
+                    enquiries.push({ 
+                        id: doc.id, 
+                        ...data,
+                        timestamp: isoTimestamp
+                    });
+                });
+                renderStaffBoard(); 
+                console.log(`[Real-Time] Board updated with ${enquiries.length} enquiries.`);
+            }, (error) => {
+                // IMPORTANT: This block catches the permission denied error!
+                console.error("REAL-TIME FAILURE: Permission Denied or Network Error. Check Firestore Rules:", error);
+                document.getElementById('submission-status').textContent = '⚠️ BOARD ERROR: Real-Time Connection Failed. Check Console/Firebase Rules.';
+            });
+        }
+
+        // ----------------------- Time and Utility Functions -----------------------
+
+        function timeSinceSubmission(isoTimestamp) {
+            const placedTime = new Date(isoTimestamp);
+            const now = new Date();
+            const diffInSeconds = Math.floor((now - placedTime) / 1000);
+
+            if (diffInSeconds < 60) return `${diffInSeconds}s ago`;
+
+            const minutes = Math.floor(diffInSeconds / 60);
+            if (minutes < 60) return `${minutes}m ${diffInSeconds % 60}s ago`;
+            
+            const hours = Math.floor(minutes / 60);
+            return `${hours}h ${minutes % 60}m ago`;
+        }
+
+        function updateLiveWaitTimes() {
+            document.querySelectorAll('.enquiry-card[data-status="New"], .enquiry-card[data-status="Contacted"]').forEach(card => {
+                const enquiry = enquiries.find(e => e.id === card.getAttribute('data-id'));
+                const timeElement = card.querySelector('.wait-time');
+                if (enquiry && timeElement) {
+                    timeElement.textContent = timeSinceSubmission(enquiry.timestamp);
+                }
+            });
+        }
+
+        function startWaitTimeTimer() {
+            if (waitTimeInterval) clearInterval(waitTimeInterval);
+            waitTimeInterval = setInterval(updateLiveWaitTimes, 3000); 
+        }
+
+        // ----------------------- Form Submission -----------------------
+
+        async function handleAddEnquiry(event) {
+            event.preventDefault(); 
+            const form = document.getElementById('enquiry-form');
+            const statusEl = document.getElementById('submission-status');
+
+            const fullName = document.getElementById('full-name').value.trim();
+            const emailAddress = document.getElementById('email-address').value.trim();
+            const subject = document.getElementById('enquiry-subject').value;
+            const message = document.getElementById('enquiry-message').value.trim();
+
+            if (!fullName || !emailAddress || !message) {
+                statusEl.textContent = 'Please fill in all required fields.';
+                statusEl.style.color = 'red';
+                return;
+            }
+            
+            statusEl.textContent = 'Submitting...';
+            statusEl.style.color = 'var(--color-status-new)';
+
+            const newEnquiry = {
+                fullName, emailAddress, subject, message, 
+                timestamp: new Date().toISOString(), 
+                status: 'New', 
+                aiPriorityScore: Math.floor(Math.random() * 50) + 50 
+            };
+
+            const success = await addEnquiryToFirestore(newEnquiry); 
+
+            if (success) {
+                form.reset();
+                statusEl.textContent = '✅ Enquiry Submitted Successfully! It is now live on the Staff Board.';
+                statusEl.style.color = 'var(--color-status-closed)';
+                setTimeout(() => statusEl.textContent = '', 5000);
+            } else {
+                statusEl.textContent = '❌ Submission Failed. Check Console for Firestore Permissions.';
+                statusEl.style.color = 'red';
+            }
+        }
+
+        // ----------------------- UI Rendering -----------------------
+
+        function formatTimestamp(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleTimeString() + ' ' + date.toLocaleDateString();
+        }
+
+        function createEnquiryCardHTML(enquiry) {
+            const subjectClass = `tag-${enquiry.subject.toLowerCase()}`;
+            
+            const staffActionButtons = (enquiry) => {
+                let buttons = '';
+                if (enquiry.status === 'New') {
+                    buttons += `<button class="btn-contacted" data-id="${enquiry.id}" data-new-status="Contacted">Mark Contacted</button>`;
+                }
+                if (enquiry.status === 'Contacted') {
+                    buttons += `<button class="btn-closed" data-id="${enquiry.id}" data-new-status="Closed">Mark Closed</button>`;
+                }
+                return buttons;
+            };
+            
+            const showWaitTime = enquiry.status !== 'Closed';
+            const priorityLevel = enquiry.aiPriorityScore > 80 ? ' (Hot Lead)' : '';
+
+            return `
+                <div class="enquiry-card" draggable="true" data-id="${enquiry.id}" data-status="${enquiry.status}">
+                    <div class="card-header">
+                        <h4>${enquiry.fullName} - <span class="subject-tag ${subjectClass}">${enquiry.subject}</span></h4>
+                    </div>
+                    
+                    <div class="meta-line">
+                        <small>Email: ${enquiry.emailAddress}</small>
+                        <span class="ai-score">AI Priority: ${enquiry.aiPriorityScore}%${priorityLevel}</span>
+                    </div>
+
+                    <div class="meta-line">
+                        <small>Submitted: ${formatTimestamp(enquiry.timestamp)}</small>
+                        ${showWaitTime ? `<span class="wait-time">${timeSinceSubmission(enquiry.timestamp)}</span>` : '<span>Closed</span>'}
+                    </div>
+
+                    <p class="card-message">Message: ${enquiry.message.substring(0, 100)}${enquiry.message.length > 100 ? '...' : ''}</p>
+
+                    <div class="staff-actions">
+                        ${staffActionButtons(enquiry)}
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStaffBoard() {
+            const groupedEnquiries = enquiries.reduce((acc, enquiry) => {
+                if (!acc[enquiry.status]) acc[enquiry.status] = [];
+                acc[enquiry.status].push(enquiry);
+                return acc;
+            }, {});
+
+            STATUSES.forEach(status => {
+                const container = document.getElementById(`${status}-container`);
+                if (container) {
+                    const statusEnquiries = groupedEnquiries[status] || [];
+                    statusEnquiries.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    container.innerHTML = statusEnquiries.map(createEnquiryCardHTML).join('');
+                }
+            });
+
+            attachEventListeners();
+        }
+
+        // ----------------------- Drag-and-Drop & Theme Handlers -----------------------
+        let draggedEnquiryId = null;
+        function handleDragStart(e) {
+            const card = e.target.closest('.enquiry-card');
+            if (!card) return;
+            draggedEnquiryId = card.getAttribute('data-id');
+            e.dataTransfer.setData('text/plain', draggedEnquiryId); 
+            card.classList.add('dragging');
+        }
+        function handleDragOver(e) {
+            e.preventDefault(); 
+            e.currentTarget.classList.add('drag-over');
+        }
+        function handleDragLeave(e) {
+            e.currentTarget.classList.remove('drag-over');
+        }
+        function handleDrop(e) {
+            e.preventDefault();
+            const targetContainer = e.currentTarget;
+            targetContainer.classList.remove('drag-over');
+            const newStatus = targetContainer.parentElement.getAttribute('data-status');
+            const enquiryId = draggedEnquiryId || e.dataTransfer.getData('text/plain');
+            
+            if (enquiryId && newStatus) {
+                updateEnquiryStatusInFirestore(enquiryId, newStatus);
+            }
+            draggedEnquiryId = null;
+        }
+        function handleDragEnd(e) {
+            e.target.closest('.enquiry-card')?.classList.remove('dragging');
+            document.querySelectorAll('.enquiries-container').forEach(container => container.classList.remove('drag-over'));
+        }
+
+        function toggleTheme() {
+            const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-theme', newTheme);
+            localStorage.setItem(STORAGE_KEY_THEME, newTheme);
+            document.getElementById('theme-toggle').textContent = newTheme === 'dark' ? '☀️' : '🌙';
+        }
+        function initializeTheme() {
+            const savedTheme = localStorage.getItem(STORAGE_KEY_THEME) || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme);
+            document.getElementById('theme-toggle').textContent = savedTheme === 'dark' ? '☀️' : '🌙';
+        }
+
+        // ----------------------- Initialization -----------------------
+        function attachEventListeners() {
+            document.getElementById('staff-board').onclick = (e) => {
+                const statusButton = e.target.closest('.staff-actions button');
+                if (statusButton) {
+                    const enquiryId = statusButton.getAttribute('data-id');
+                    const newStatus = statusButton.getAttribute('data-new-status');
+                    if (enquiryId && newStatus) updateEnquiryStatusInFirestore(enquiryId, newStatus);
+                } 
+            };
+            document.querySelectorAll('.enquiry-card').forEach(card => {
+                card.removeEventListener('dragstart', handleDragStart); card.removeEventListener('dragend', handleDragEnd);
+                card.addEventListener('dragstart', handleDragStart); card.addEventListener('dragend', handleDragEnd);
+            });
+            document.querySelectorAll('.enquiries-container').forEach(container => {
+                container.removeEventListener('dragover', handleDragOver); container.removeEventListener('dragleave', handleDragLeave); container.removeEventListener('drop', handleDrop);
+                container.addEventListener('dragover', handleDragOver); container.addEventListener('dragleave', handleDragLeave); container.addEventListener('drop', handleDrop);
+            });
+        }
+        
+        function initializeApp() {
+            initializeTheme();
+            document.getElementById('theme-toggle').onclick = toggleTheme;
+            document.getElementById('enquiry-form').onsubmit = handleAddEnquiry; 
+            
+            startRealtimeEnquiriesListener(); 
+            startWaitTimeTimer();
+        }
+
+        document.addEventListener('DOMContentLoaded', initializeApp);
+
+    </script>
+</body>
+</html>
